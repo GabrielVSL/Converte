@@ -17,6 +17,7 @@ export async function GET() {
 
         return json(respostasFormatadas);
     } catch (erro) {
+        console.error("🚨 ERRO NO GET:", erro);
         return json({ erro: "Falha ao ler dados do banco" }, { status: 500 });
     }
 }
@@ -36,6 +37,7 @@ export async function POST({ request }) {
 
         return json({ sucesso: true });
     } catch (erro) {
+        console.error("🚨 ERRO REAL DO TURSO NO POST:", erro);
         return json({ erro: "Falha interna ao salvar no banco" }, { status: 500 });
     }
 }
