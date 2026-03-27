@@ -16,6 +16,7 @@
 		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@tailwindcss/vite": "^4.1.18",
+		"@types/file-saver": "^2.0.7",
 		"svelte": "^5.54.0",
 		"svelte-check": "^4.4.2",
 		"tailwindcss": "^4.1.18",
@@ -25,6 +26,9 @@
 	"dependencies": {
 		"@libsql/client": "^0.17.2",
 		"axios": "^1.13.6",
+		"docxtemplater": "^3.68.3",
+		"file-saver": "^2.0.5",
+		"pizzip": "^3.2.0",
 		"xlsx": "^0.18.5"
 	}
 }
