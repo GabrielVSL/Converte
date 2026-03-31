@@ -27,16 +27,57 @@ export async function POST({ request }) {
     try {
         const body = await request.json();
         
-        // --- NOVA LÓGICA DE SINCRONIZAÇÃO EM LOTE (Array) ---
-        // Se o corpo da requisição for uma Lista (vindo do nosso Modal Sync)
+        // --- FUNÇÃO DE HIGIENIZAÇÃO DE DADOS (O SEGURANÇA DA BALADA) ---
+        // Essa função pega o objeto cru do Forms e limpa chaves e acha os nomes reais
+        function limparESepararRegistro(registroSujo: any) {
+            let nomeRealAluno = "Nome Não Informado";
+            let nomeRealProf = "Professor Não Informado";
+            let respostasLimpas: any = {};
+
+            // 1. Vasculha todas as chaves que vieram do n8n/Forms
+            const chaves = Object.keys(registroSujo.respostas || registroSujo);
+
+            for (const chave of chaves) {
+                // Remove espaços invisíveis (\u00A0) e espaços nas pontas
+                const chaveLimpa = chave.replace(/[\u00A0\u200B]/g, " ").trim();
+                const valor = (registroSujo.respostas || registroSujo)[chave];
+
+                // 2. Caça a identidade real (Case insensitive)
+                if (chaveLimpa.toLowerCase().includes('etapa')) {
+                    respostasLimpas['Etapa'] = valor;
+                } else if (chaveLimpa.toLowerCase() === 'nome do aluno') {
+                    nomeRealAluno = valor;
+                } else if (chaveLimpa.toLowerCase() === 'nome') {
+                    nomeRealProf = valor;
+                } else if (chaveLimpa.toLowerCase() !== 'email' && chaveLimpa.toLowerCase() !== 'professor') {
+                    // 3. Salva o resto das perguntas com a chave limpa (sem espaços no final)
+                    respostasLimpas[chaveLimpa] = valor;
+                }
+            }
+
+            // Fallbacks (caso o nome não venha na chave limpa, tenta nas chaves enviadas originalmente)
+            if (nomeRealAluno === "Nome Não Informado" && registroSujo.nome_aluno && registroSujo.nome_aluno !== "Sem Nome") {
+                nomeRealAluno = registroSujo.nome_aluno;
+            }
+            // Se o nome do professor não foi achado na coluna "Nome", usa o email que veio em "Professor"
+            if (nomeRealProf === "Professor Não Informado" && registroSujo.professor) {
+                nomeRealProf = registroSujo.professor;
+            }
+
+            return { nome_aluno: nomeRealAluno, professor: nomeRealProf, respostas: respostasLimpas };
+        }
+
+        // --- LÓGICA DE SINCRONIZAÇÃO EM LOTE (Array do n8n ou Modal Sync) ---
         if (Array.isArray(body)) {
             let inseridos = 0;
-            for (const registro of body) {
-                // Validação rigorosa: só insere se tiver os nomes
-                if (registro.nome_aluno && registro.professor) {
+            for (const registroCru of body) {
+                // Passa o registro pelo nosso filtro
+                const registroLimpo = limparESepararRegistro(registroCru);
+
+                if (registroLimpo.nome_aluno && registroLimpo.professor) {
                     await db.execute({
                         sql: 'INSERT INTO respostas (nome_aluno, professor, dados_json) VALUES (?, ?, ?)',
-                        args: [registro.nome_aluno, registro.professor, JSON.stringify(registro.respostas)]
+                        args: [registroLimpo.nome_aluno, registroLimpo.professor, JSON.stringify(registroLimpo.respostas)]
                     });
                     inseridos++;
                 }
@@ -44,19 +85,21 @@ export async function POST({ request }) {
             return json({ sucesso: true, inseridos });
         }
 
-        // --- LÓGICA NORMAL DE 1 REGISTRO (vindo do Make.com/Forms) ---
-        if (!body.nome_aluno || !body.professor) {
+        // --- LÓGICA DE 1 REGISTRO (Fallback) ---
+        const registroUnicoLimpo = limparESepararRegistro(body);
+        
+        if (!registroUnicoLimpo.nome_aluno || !registroUnicoLimpo.professor) {
             return json({ erro: "Dados obrigatórios ausentes" }, { status: 400 });
         }
 
         await db.execute({
             sql: 'INSERT INTO respostas (nome_aluno, professor, dados_json) VALUES (?, ?, ?)',
-            args: [body.nome_aluno, body.professor, JSON.stringify(body.respostas)]
+            args: [registroUnicoLimpo.nome_aluno, registroUnicoLimpo.professor, JSON.stringify(registroUnicoLimpo.respostas)]
         });
 
         return json({ sucesso: true });
+        
     } catch (erro) {
-        // Log para você ver no terminal se der erro
         console.error("🚨 ERRO CRÍTICO NO POST:", erro);
         return json({ erro: "Falha interna ao salvar no banco" }, { status: 500 });
     }
@@ -75,7 +118,7 @@ export async function DELETE({ url }) {
             args: [id]
         });
         
-        return json({ sucesso: true, mensagem: 'Registo excluído com sucesso' });
+        return json({ sucesso: true, mensagem: 'Registro excluído com sucesso' });
     } catch (erro) {
         console.error("Erro no BD ao excluir:", erro);
         return json({ erro: 'Erro interno ao excluir no banco' }, { status: 500 });
@@ -90,10 +133,8 @@ export async function PUT({ request }) {
             return json({ erro: "ID do registro ausente" }, { status: 400 });
         }
 
-        // Separa o ID e recria o objeto JSON de respostas (removendo o id da payload do JSON interno)
         const { id, "Nome do Aluno": nome_aluno, "Professor": professor, ...respostasDoForms } = body;
 
-        // Atualiza no banco Turso
         await db.execute({
             sql: 'UPDATE respostas SET nome_aluno = ?, professor = ?, dados_json = ? WHERE id = ?',
             args: [nome_aluno, professor, JSON.stringify(respostasDoForms), id]

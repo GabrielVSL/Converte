@@ -1,5 +1,5 @@
 <script lang="ts">
-    // Recebendo os dados e os estados "bindáveis" (que podem ser alterados daqui)
+    // Recebendo os dados e os estados "bindáveis"
     let { 
         mounted,
         alunosUnicos,
@@ -8,6 +8,7 @@
         carregando,
         busca = $bindable(),
         professorFiltro = $bindable(),
+        etapaFiltro = $bindable(), // <--- ADICIONE ESTA LINHA AQUI
         alunoSelecionado = $bindable()
     } = $props();
 </script>
@@ -39,6 +40,19 @@
             <select bind:value={professorFiltro} class="w-full pl-10 pr-10 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm text-slate-700 font-medium appearance-none cursor-pointer">
                 <option value="">Todos os Professores</option>
                 {#each professoresUnicos as prof}<option value={prof}>{prof}</option>{/each}
+            </select>
+            <svg class="absolute right-3.5 top-4 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+        </div>
+
+        <div class="relative group">
+            <svg class="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z" />
+            </svg>
+            <select bind:value={etapaFiltro} class="w-full pl-10 pr-10 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none shadow-sm text-slate-700 font-medium appearance-none cursor-pointer">
+                <option value="">Todas as Etapas</option>
+                <option value="1ª Etapa">1ª Etapa</option>
+                <option value="2ª Etapa">2ª Etapa</option>
+                <option value="3ª Etapa">3ª Etapa</option>
             </select>
             <svg class="absolute right-3.5 top-4 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
         </div>

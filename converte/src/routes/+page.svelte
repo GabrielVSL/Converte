@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import PizZip from 'pizzip';
     import Docxtemplater from 'docxtemplater';
+    import JSZip from 'jszip';
     
     import pkg from 'file-saver';
     const { saveAs } = pkg;
@@ -19,6 +20,7 @@
     let alunoSelecionado = $state<string>('');
     let busca = $state('');
     let professorFiltro = $state<string>('');
+    let etapaFiltro = $state<string>('');
 
     // --- ESTADOS DA UI ---
     let gerando = $state(false);
@@ -50,40 +52,66 @@
             .sort()
     );
     
+    // Atualize para incluir a etapa na filtragem
+    let respostasFiltradas = $derived(respostas.filter(r => {
+        const matchBusca = busca === '' || (r['Nome do Aluno'] && r['Nome do Aluno'].toLowerCase().includes(busca.toLowerCase()));
+        const matchProf = professorFiltro === '' || r['Professor'] === professorFiltro;
+        const matchEtapa = etapaFiltro === '' || r['Etapa'] === etapaFiltro; // <-- NOVO
+        return matchBusca && matchProf && matchEtapa;
+    }));
+
+    // Faça o mesmo para as respostas do aluno selecionado
     let respostasDoAluno = $derived(
-        respostas.filter(r => {
-            const ehOAlunoCerto = alunoSelecionado ? r['Nome do Aluno'] === alunoSelecionado : false;
-            const ehOProfessorCerto = professorFiltro ? r['Professor'] === professorFiltro : true;
-            return ehOAlunoCerto && ehOProfessorCerto;
-        })
+        respostas.filter(r => 
+            r['Nome do Aluno'] === alunoSelecionado && 
+            (professorFiltro === '' || r['Professor'] === professorFiltro) &&
+            (etapaFiltro === '' || r['Etapa'] === etapaFiltro) // <-- NOVO
+        )
     );
 
-    // --- LÓGICA DE BUSCA DE DADOS ---
+// --- LÓGICA DE BUSCA DE DADOS ---
     async function buscarDados() {
         carregando = true;
         try {
             const requisicao = await fetch('/api/respostas');
             const dadosBrutos = await requisicao.json();
 
-            // --- O "TRADUTOR" CENTRAL ---
-            // Pega todas as perguntas exatas que o seu Dashboard espera
             const camposEsperados = Object.values(SECTIONS).flat();
-
-            respostas = dadosBrutos.map(reg => {
-                const regLimpo = { ...reg }; // Faz uma cópia da linha do banco
+            
+            respostas = dadosBrutos.map((reg: any) => {
+                const regLimpo = { ...reg };
                 const chavesNoBanco = Object.keys(regLimpo);
 
+                // --- CORREÇÃO CIRÚRGICA DOS NOMES ---
+                let nomeAlunoCorreto = regLimpo['Nome do Aluno'];
+                let nomeProfCorreto = regLimpo['Professor']; // Atualmente está recebendo o email
+
+                for (const chave of chavesNoBanco) {
+                    // Limpa espaços invisíveis do MS Forms (\u00A0 e \u200B)
+                    const chaveLimpa = chave.replace(/[\u00A0\u200B]/g, " ").trim().toLowerCase();
+                    
+                    // Puxa o nome real do aluno, ignorando a chave corrompida com "Sem Nome"
+                    if (chaveLimpa === 'nome do aluno' && regLimpo[chave] && regLimpo[chave] !== 'Sem Nome') {
+                        nomeAlunoCorreto = regLimpo[chave];
+                    }
+                    
+                    // A coluna "Nome" pura do Forms é quem guarda o nome real da professora
+                    if (chaveLimpa === 'nome' && regLimpo[chave]) {
+                        nomeProfCorreto = regLimpo[chave];
+                    }
+                }
+
+                regLimpo['Nome do Aluno'] = nomeAlunoCorreto !== 'Sem Nome' ? nomeAlunoCorreto : 'Nome Não Informado';
+                regLimpo['Professor'] = nomeProfCorreto;
+                // ------------------------------------
+
                 for (const campoExato of camposEsperados) {
-                    // Procura se a pergunta veio do Excel com letra minúscula ou espaço extra
                     const chaveQueVeioDoExcel = chavesNoBanco.find(k => 
-                        k.replace(/\u00A0/g, " ").trim().toLowerCase() === campoExato.toLowerCase()
+                        k.replace(/[\u00A0\u200B]/g, " ").trim().toLowerCase() === campoExato.trim().toLowerCase()
                     );
                     
                     if (chaveQueVeioDoExcel) {
-                        // Transfere o valor para a chave com o nome PERFEITO que o sistema espera
                         regLimpo[campoExato] = regLimpo[chaveQueVeioDoExcel];
-                        
-                        // Apaga a chave velha/suja se o nome era diferente, para evitar lixo
                         if (chaveQueVeioDoExcel !== campoExato) {
                             delete regLimpo[chaveQueVeioDoExcel];
                         }
@@ -93,7 +121,7 @@
             });
 
         } catch (erro) {
-            console.error("Erro:", erro);
+            console.error("Erro ao buscar dados:", erro);
         } finally {
             carregando = false;
         }
@@ -147,7 +175,7 @@
         return String(texto).trim();
     }
 
-    async function gerarDOCX() {
+async function gerarDOCX() {
         if (!alunoSelecionado || respostasDoAluno.length === 0) return;
         gerando = true;
 
@@ -156,41 +184,106 @@
             if (!response.ok) throw new Error("Template não encontrado na pasta static");
             const arrayBuffer = await response.arrayBuffer();
 
-            const zip = new PizZip(arrayBuffer);
-            const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+            // --- Função Auxiliar de Busca Blindada ---
+            const pegarResposta = (r: any, palavraChave: string) => {
+                let chave = Object.keys(r).find(k => k.trim().toLowerCase() === palavraChave.trim().toLowerCase());
+                if (!chave) chave = Object.keys(r).find(k => k.toLowerCase().includes(palavraChave.toLowerCase()));
+                return chave ? r[chave] : null;
+            };
 
-            doc.render({
-                nome_aluno: alunoSelecionado,
-                ano: new Date().getFullYear(),
-                registros: respostasDoAluno.map(r => ({
-                    professor: formatarTexto(r['Professor']) || "Não informado",
-                    componentes_curriculares: formatarTexto(r['Componente(s) Curricular(es)']) || "-",
-                    modalidade_ensino: formatarTexto(r['Modalidade de Ensino']) || "-",
-                    necessidades_relacionadas: formatarTexto(r['Necessidades Relacionadas']) || "-",
-                    autonomia_rotinas: formatarTexto(r['Autonomia nas Rotinas']) || "-",
-                    comunicacao_eficaz: formatarTexto(r['Comunicação Eficaz']) || "-",
-                    relacao_colegas_professores: formatarTexto(r['Relação com Colegas e Professores']) || "-",
-                    comportamento_interacao: formatarTexto(r['Comportamento e Interação']) || "-",
-                    comunicacao: formatarTexto(r['Comunicação']) || "-",
-                    limites_agressividade: formatarTexto(r['Limites e Agressividade']) || "-",
-                    area_curriculo_pei: formatarTexto(r['Área do Currículo PEI']) || "-",
-                    lp_metodologia: formatarTexto(r['Metodologia (Português)']) || "-",
-                    lp_habilidades: formatarTexto(r['Habilidades Adquiridas (Português)']) || "-",
-                    mat_metodologia: formatarTexto(r['Metodologia (Matemática)']) || "-",
-                    mat_habilidades: formatarTexto(r['Habilidades Adquiridas (Matemática)']) || "-",
-                    cie_metodologia: formatarTexto(r['Metodologia (Ciências)']) || "-",
-                    cie_habilidades: formatarTexto(r['Habilidades Adquiridas (Ciências)']) || "-",
-                    hge_metodologia: formatarTexto(r['Metodologia (Hist. Geo.)']) || "-",
-                    hge_habilidades: formatarTexto(r['Habilidades Adquiridas (Hist. Geo.)']) || "-",
-                    adaptacoes_necessarias: formatarTexto(r['Adaptações Necessárias']) || "-",
-                    recursos_apoio: formatarTexto(r['Recursos de Apoio']) || "-",
-                    metas_objetivos_pei: formatarTexto(r['Metas e Objetivos do PEI']) || "-",
-                    observacoes_finais: formatarTexto(r['Observações Finais']) || "-"
-                }))
-            });
+            // --- Formatação com Mensagem Profissional para Vazios ---
+            const formatarDocx = (valor: any, textoVazio = "Não avaliado neste componente / Não se aplica") => {
+                const txt = formatarTexto(valor);
+                return (txt && txt !== '-' && txt !== 'undefined') ? txt : textoVazio;
+            };
 
-            const blob = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-            saveAs(blob, `PEI_${alunoSelecionado.replace(/\s+/g, '_')}.docx`);
+            // --- Função de Renderização do Template ---
+            const criarBlobDocx = (respostasDoDoc: any[]) => {
+                const zipDoc = new PizZip(arrayBuffer);
+                const doc = new Docxtemplater(zipDoc, { paragraphLoop: true, linebreaks: true });
+
+                doc.render({
+                    nome_aluno: alunoSelecionado,
+                    ano: new Date().getFullYear(),
+                    registros: respostasDoDoc.map(r => {
+                        const componente = String(pegarResposta(r, 'Componente') || "").toLowerCase();
+                        const metodologiaForm = pegarResposta(r, 'metodologia de trabalho');
+                        const habilidadesForm = pegarResposta(r, 'habilidades/aprendizados');
+                        const naoAplica = "Não se aplica a esta disciplina";
+
+                        // Roteamento Inteligente da Metodologia
+                        let lp_met = naoAplica, lp_hab = naoAplica;
+                        let mat_met = naoAplica, mat_hab = naoAplica;
+                        let cie_met = naoAplica, cie_hab = naoAplica;
+                        let hge_met = naoAplica, hge_hab = naoAplica;
+
+                        if (componente.includes('portugu') || componente.includes('letra')) {
+                            lp_met = formatarDocx(metodologiaForm, "Não preenchido"); lp_hab = formatarDocx(habilidadesForm, "Não preenchido");
+                        } else if (componente.includes('matem')) {
+                            mat_met = formatarDocx(metodologiaForm, "Não preenchido"); mat_hab = formatarDocx(habilidadesForm, "Não preenchido");
+                        } else if (componente.includes('ciência') || componente.includes('natureza') || componente.includes('biologia')) {
+                            cie_met = formatarDocx(metodologiaForm, "Não preenchido"); cie_hab = formatarDocx(habilidadesForm, "Não preenchido");
+                        } else if (componente.includes('hist') || componente.includes('geograf') || componente.includes('humanas')) {
+                            hge_met = formatarDocx(metodologiaForm, "Não preenchido"); hge_hab = formatarDocx(habilidadesForm, "Não preenchido");
+                        }
+
+                        return {
+                            professor: formatarDocx(r['Professor'], "Não informado"),
+                            componentes_curriculares: formatarDocx(pegarResposta(r, 'Componente'), "Não informado"),
+                            modalidade_ensino: formatarDocx(pegarResposta(r, 'Modalidade de ensino')),
+                            necessidades_relacionadas: formatarDocx(pegarResposta(r, 'necessidades relacionada')),
+
+                            autonomia_rotinas: formatarDocx(pegarResposta(r, 'autonomia nas rotinas')),
+                            comunicacao_eficaz: formatarDocx(pegarResposta(r, 'comunica de forma eficaz')),
+                            relacao_colegas_professores: formatarDocx(pegarResposta(r, 'Relação com colegas')),
+                            comportamento_interacao: formatarDocx(pegarResposta(r, 'comportamento, autorregulação')),
+                            comunicacao: formatarDocx(pegarResposta(r, 'Comunicação')),
+                            limites_agressividade: formatarDocx(pegarResposta(r, 'Limites e agressividade')),
+                            area_curriculo_pei: formatarDocx(pegarResposta(r, 'Área do Currículo PEI')),
+
+                            lp_metodologia: lp_met,
+                            lp_habilidades: lp_hab,
+                            mat_metodologia: mat_met,
+                            mat_habilidades: mat_hab,
+                            cie_metodologia: cie_met,
+                            cie_habilidades: cie_hab,
+                            hge_metodologia: hge_met,
+                            hge_habilidades: hge_hab,
+
+                            adaptacoes_necessarias: formatarDocx(pegarResposta(r, 'Adaptações necessárias')),
+                            recursos_apoio: formatarDocx(pegarResposta(r, 'Recursos de apoio')),
+                            metas_objetivos_pei: formatarDocx(pegarResposta(r, 'Metas e objetivos')),
+                            observacoes_finais: formatarDocx(pegarResposta(r, 'Observações finais'))
+                        };
+                    })
+                });
+
+                return doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+            };
+
+            const nomeLimpo = alunoSelecionado.replace(/\s+/g, '_');
+
+            // --- LÓGICA DO SELETOR: ZIP OU DOCX ---
+            if (respostasDoAluno.length === 1) {
+                // Filtro ativo: Baixa 1 DOCX
+                const r = respostasDoAluno[0];
+                const nomeProf = r['Professor'] ? r['Professor'].split(' ')[0] : 'Prof';
+                const blob = criarBlobDocx([r]);
+                saveAs(blob, `PEI_${nomeLimpo}_${nomeProf}.docx`);
+            } else {
+                // Sem filtro: Baixa um ZIP com os DOCX de todos os professores
+                const zipFile = new JSZip();
+                
+                respostasDoAluno.forEach((r, index) => {
+                    const blob = criarBlobDocx([r]);
+                    const nomeProf = r['Professor'] ? r['Professor'].split(' ')[0] : `Prof_${index}`;
+                    zipFile.file(`PEI_${nomeLimpo}_${nomeProf}.docx`, blob);
+                });
+
+                const zipBlob = await zipFile.generateAsync({ type: "blob" });
+                saveAs(zipBlob, `PEIs_${nomeLimpo}_COMPLETO.zip`);
+            }
+
         } catch (erro) {
             console.error("Erro ao gerar DOCX:", erro);
             alert("Erro ao gerar o documento. Verifique o console.");
@@ -267,7 +360,7 @@
     <div class="max-w-7xl mx-auto p-4 lg:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         <Sidebar 
             {mounted} {alunosUnicos} {respostas} {professoresUnicos} {carregando}
-            bind:busca={busca} bind:professorFiltro={professorFiltro} bind:alunoSelecionado={alunoSelecionado}
+            bind:busca={busca} bind:professorFiltro={professorFiltro} bind:etapaFiltro={etapaFiltro} bind:alunoSelecionado={alunoSelecionado}
         />
 
         <MainContent 
