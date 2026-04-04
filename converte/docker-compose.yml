@@ -1,0 +1,15 @@
+services:
+  converte:
+    build: .
+    container_name: converte
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - converte-db:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
+volumes:
+  converte-db:

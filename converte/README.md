@@ -1,42 +1,72 @@
-# sv
+# Converte
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Sistema de gerenciamento de dados escolares (PEI - Plano Educacional Individualizado). Recebe respostas do Google Forms via n8n, armazena em SQLite e permite consulta, edição, geração de documentos e exportação de dados.
 
-## Creating a project
+## Funcionalidades
 
-If you're seeing this, you've probably already done this step. Congrats!
+- Recebe dados do Google Forms via webhook (n8n)
+- Cadastro, edição e exclusão de registros
+- Geração de documentos .docx por aluno
+- Exportação de dados (Excel, CSV, ZIP)
+- Login por sessão (cookies)
+- Interface com filtros por aluno, professor e etapa
 
-```sh
-# create a new project
-npx sv create my-app
+## Tecnologias
+
+- [SvelteKit 5](https://svelte.dev/) com runes
+- [Tailwind CSS 4](https://tailwindcss.com/)
+- SQLite ([libsql](https://turso.tech/libsql))
+- [docxtemplater](https://docxtemplater.com/) + [PizZip](https://pizzip.com/)
+- [Papa Parse](https://www.papaparse.com/), [JSZip](https://stuk.github.io/jszip/), [SheetJS/xlsx](https://sheetjs.com/)
+- [axios](https://axios-http.com/)
+
+## Instalação
+
+```bash
+npm install
 ```
 
-To recreate this project with the same configuration:
+## Desenvolvimento
 
-```sh
-# recreate this project
-npx sv@0.13.0 create --template minimal --types ts --install npm frontend
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+```bash
 npm run dev
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+# open http://localhost:5173
 ```
 
-## Building
+## Build
 
-To create a production version of your app:
-
-```sh
+```bash
 npm run build
+
+# preview da build
+npm run preview
 ```
 
-You can preview the production build with `npm run preview`.
+## Deploy
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+O projeto inclui `Dockerfile` e `docker-compose.yml`. Veja [DEPLOY.md](DEPLOY.md) para instruções detalhadas de deploy no servidor CasaOS.
+
+## Estrutura
+
+```
+├── src/
+│   ├── lib/
+│   │   ├── components/    # Componentes Svelte (Header, Sidebar, Modal, etc)
+│   │   ├── server/
+│   │   │   └── db.ts      # Cliente SQLite
+│   │   └── utils/
+│   │       └── excel.ts   # Funções de exportação
+│   └── routes/
+│       ├── +page.svelte           # Página principal
+│       ├── +layout.svelte         # Layout base
+│       ├── login/
+│       │   ├── +page.svelte       # Tela de login
+│       │   └── +page.server.ts    # Autenticação
+│       └── api/respostas/
+│           └── +server.ts         # CRUD da tabela respostas
+├── data/                   # Banco SQLite (ignorado no git)
+├── Dockerfile
+├── docker-compose.yml
+└── DEPLOY.md
+```

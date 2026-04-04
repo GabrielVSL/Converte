@@ -1,18 +1,22 @@
+# Dependencies
 node_modules
+
+# Build output
+.svelte-kit
+build
 
 # Output
 .output
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
-/build
 
 # OS
 .DS_Store
 Thumbs.db
+*.local
 
-# Env
+# Environment
 .env
 .env.*
 !.env.example
@@ -24,3 +28,10 @@ vite.config.ts.timestamp-*
 
 # Database
 *.db
+data/**/*.db
+
+# IDE
+.idea/
+
+# OpenClaude
+.openclaude-profile.json
