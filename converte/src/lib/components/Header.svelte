@@ -4,7 +4,7 @@
         gerarDOCX, 
         alunoSelecionado, 
         gerando,
-        abrirModalSync // <-- ADICIONE ISTO AQUI
+        abrirModalSync
     } = $props();
 </script>
 
