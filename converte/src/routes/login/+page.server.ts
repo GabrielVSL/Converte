@@ -1,12 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { ADMIN_PASSWORD } from '$env/static/private';
+import { env } from '$env/dynamic/private'; // <-- MUDOU AQUI: dinâmico em vez de estático
 
 export const actions = {
     default: async ({ request, cookies }) => {
         const data = await request.formData();
         const password = data.get('password');
 
-        if (password !== ADMIN_PASSWORD) {
+        // MUDOU AQUI: Agora usamos env.ADMIN_PASSWORD
+        if (password !== env.ADMIN_PASSWORD) {
             return fail(400, { error: 'Senha incorreta!' });
         }
 

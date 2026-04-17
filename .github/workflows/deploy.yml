@@ -15,12 +15,13 @@ jobs:
       - name: Baixar o código mais recente
         uses: actions/checkout@v4
 
-      - name: Fazer o Build e Subir o Contêiner
+      - name: Sincronizar arquivos para a pasta do CasaOS
         run: |
-          cd /DATA/AppData/Converte/converte
-          docker compose up -d --build
+          mkdir -p /DATA/AppData/Converte/converte
+          # Copia os arquivos ignorando o .env e o banco de dados (para não deletar os seus)
+          rsync -av --delete --exclude='.git/' --exclude='.github/' --exclude='.env' --exclude='*.db' ./converte/ /DATA/AppData/Converte/converte/
 
       - name: Fazer o Build e Subir o Contêiner
         run: |
           cd /DATA/AppData/Converte/converte
-          sudo docker compose up -d --build
+          docker compose up -d --build
