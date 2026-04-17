@@ -3,27 +3,25 @@ name: Deploy Automático CasaOS
 on:
   push:
     branches:
-      - main # ou master, dependendo de como está no seu repositório
+      - main
       - master
-    workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   deploy:
-    runs-on: self-hosted # Isso diz pro GitHub rodar no seu servidor físico
+    runs-on: self-hosted
 
     steps:
       - name: Baixar o código mais recente
         uses: actions/checkout@v4
 
-      - name: Copiar arquivos para a pasta do CasaOS
+      - name: Sincronizar arquivos para a pasta do CasaOS
         run: |
-          # Garante que a pasta existe
           mkdir -p /DATA/AppData/Converte/converte
-          # Copia os arquivos do repositório para a pasta de produção (excluindo arquivos de git/runner)
-          rsync -av --exclude='.git/' --exclude='.github/' ./ /DATA/AppData/Converte/converte/
+          # Copia o CONTEÚDO da pasta converte do GitHub direto para o destino
+          rsync -av --delete ./converte/ /DATA/AppData/Converte/converte/
 
       - name: Fazer o Build e Subir o Contêiner
         run: |
           cd /DATA/AppData/Converte/converte
-          # Usa o docker compose para reconstruir e reiniciar o app sem derrubar tudo
-          docker compose up -d --build
+          sudo docker compose up -d --build
