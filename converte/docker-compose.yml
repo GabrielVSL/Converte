@@ -7,6 +7,8 @@ services:
       - "3000:3000"
     volumes:
       - ./banco_local_pei.db:/app/banco_local_pei.db
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
