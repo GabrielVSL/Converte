@@ -6,10 +6,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - converte-db:/app/data
+      - ./banco_local_pei.db:/app/banco_local_pei.db
     environment:
       - NODE_ENV=production
       - PORT=3000
-
-volumes:
-  converte-db:
