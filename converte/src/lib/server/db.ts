@@ -1,7 +1,8 @@
 import { createClient } from '@libsql/client';
-import { building } from '$app/environment'; // Importa o detector de build
+import { building } from '$app/environment';
+import { env } from '$env/dynamic/private'; // Puxa do .env em tempo real
 
-// Se estiver "buildando", usa a memória RAM. Se estiver rodando no servidor, usa o arquivo real.
 export const db = createClient({
-    url: building ? 'file::memory:' : `file:${process.env.DATABASE_PATH ?? './banco_local_pei.db'}`
+    // Se não achar no .env, assume que é local do seu PC
+    url: building ? 'file::memory:' : `file:${env.DATABASE_PATH ?? './banco_local_pei.db'}`
 });

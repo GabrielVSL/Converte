@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./banco_local_pei.db:/app/banco_local_pei.db
+      - ./data:/app/data
     env_file:
       - .env
     environment:

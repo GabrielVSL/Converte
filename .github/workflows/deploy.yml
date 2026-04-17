@@ -19,7 +19,7 @@ jobs:
         run: |
           mkdir -p /DATA/AppData/Converte/converte
           # Copia os arquivos ignorando o .env e o banco de dados (para não deletar os seus)
-          rsync -av --delete --exclude='.git/' --exclude='.github/' --exclude='.env' --exclude='*.db' ./converte/ /DATA/AppData/Converte/converte/
+          rsync -av --delete --exclude='.git/' --exclude='.github/' --exclude='.env' --exclude='data/' ./converte/ /DATA/AppData/Converte/converte/
 
       - name: Fazer o Build e Subir o Contêiner
         run: |
